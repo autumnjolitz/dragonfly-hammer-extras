@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 set -o pipefail || true
 set -eu
@@ -35,7 +35,7 @@ hammer_cmd=hammer
 if [ "x$(id -u)" != 'x0' ]; then
     if [ x$AUTO_SUDO != 'x1' ] || ! (2>/dev/null sudo -v) ; then
         perror 'error: requires superuser privileges!'
-        return 140
+        exit 140
     fi
     [ "x$DEBUG" = x1 ] && perror 'warning: not root, assuming sudo access'
     hammer_cmd='sudo -H hammer'
@@ -151,6 +151,41 @@ pfs-id () {
     fi
 }
 
+_join_delim () {
+    local delim="${1:-,}"
+    shift
+    local line=
+    local result=
+    if [ ! -t 0 ]; then
+        while IFS=$'\n' read -r line
+        do
+            if [ "x${line}" = x ]; then
+                continue
+            fi
+            if [ "x$result" = x ]; then
+                result="$line"
+            else
+                result="${result}${delim}${line}"
+            fi
+        done < /dev/stdin
+        echo $result
+        return 0
+    fi
+    while [ $# -gt 0 ]; do
+        line="$1"
+        shift
+        if [ "x${line}" = x ]; then
+            continue
+        fi
+        if [ "x$result" = x ]; then
+            result="$line"
+        else
+            result="${result}${delim}${line}"
+        fi
+    done
+    echo "$result"
+}
+
 PFS_ATTRIBUTES='id
 type
 state
@@ -242,12 +277,23 @@ attr-by () {
             ;;
         esac
     done
+    if [ "$num_targets" -eq 0 -a "$_print_help" -ne 1 ]; then
+        perror 'error: path not given to get attributes for'
+        _print_help=1
+    fi
+    if [ $_print_help -eq 1 ]; then
+        local exe="$(basename "$0")"
+        perror "$exe"' PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
+'"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
+'"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
+
+available attributes:
+    '"$(echo "$PFS_ATTRIBUTES" | _join_delim ', ' )"'
+'
+        return 4
+    fi
 
     local rc=
-    if [ "$num_targets" -eq 0 ]; then
-        perror 'error: path not given to get attributes for'
-        return 3
-    fi
     if [ $num_targets -gt 1 ]; then
         IFS=$'\n'
         for target in $targets
@@ -256,15 +302,6 @@ attr-by () {
             attr-by "$target" -- "${@}"
         done
         return 0
-    fi
-    if [ $_print_help -eq 1 ]; then
-        perror "$0"' PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
-'"$0"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1 ATTRIBUTE2 [...ATTRIBUTEN]
-'"$0"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
-available attributes:
-    '"$(echo "$PFS_ATTRIBUTES" | xargs)"'
-'
-        exit 4
     fi
 
     if ! in-pfs "$target"; then
