@@ -18,6 +18,10 @@ archive_ctl_commands=''
 
 AUTO_SUDO="${ARCHIVE_CTL_AUTO_SUDO:-}"
 
+if assert_var 'ARCHIVE_CTL_EXPORT_DEBUG_INTERNALS'; then
+    archive_ctl_export_internals="${ARCHIVE_CTL_EXPORT_DEBUG_INTERNALS}"
+fi
+
 while [ $# -gt 0 ]; do
     case "${1:-}" in
         --debug|-d)
@@ -26,6 +30,10 @@ while [ $# -gt 0 ]; do
         ;;
         --sudo)
             AUTO_SUDO=1
+            shift
+        ;;
+        --export-debug-internals)
+            archive_ctl_export_internals=1
             shift
         ;;
         *)
@@ -45,7 +53,7 @@ esac
 hammer_cmd="${ARCHIVE_CTL_HAMMER_COMMAND:-hammer}"
 
 if [ "$(id -u)" != '0' ]; then
-    if [ "$AUTO_SUDO" = '0' ] || [ "$AUTO_SUDO" = '1' ] && ! 2>/dev/null sudo -v ; then
+    if [ "$AUTO_SUDO" = '0' ] || ([ "$AUTO_SUDO" = '1' ] && ! 2>/dev/null sudo -v) ; then
         perror 'error: requires superuser privileges!'
         exit 140
     fi
@@ -704,9 +712,25 @@ list_replicas_for_pfs () {
 
 # shellcheck disable=SC2329
 help () {
-    perror "$0"' [ACTION] [...]
+    # ARJ: false positive on --export-debug-internals'"${TAB}"'
+    # shellcheck disable=SC2016
+    perror "$0"' [-d | --debug] [--sudo] [ACTION] [...]
 
-available actions: '"${NEWLINE}  $(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"'
+General flags:
+    --sudo'"${TAB}"' use "sudo -H" when not superuser.
+
+Debugging flags:
+    -d --debug'"${TAB}"' "set -x" in shell for debugging output.
+    --export-debug-internals'"${TAB}"' allow calling non-exported functions.
+
+Environment variables:
+    ARCHIVE_CTL_AUTO_SUDO
+    ARCHIVE_CTL_DEBUG
+    ARCHIVE_CTL_EXPORT_DEBUG_INTERNALS
+    ARCHIVE_CTL_LIB - search path for common.sh et al.
+                      Defaults to "$(realpath "'"$0"'")"
+
+Available actions: '"${NEWLINE}  $(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"'
 '
 }
 register_command archive_ctl help
@@ -720,10 +744,10 @@ run () {
         *"$_command"*)
             ;;
         *)
-            perror "$_command"' not recognized!
-
-available commands: '"${NEWLINE}$(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"
-            return 44
+            if ! [ "${archive_ctl_export_internals:-0}" -eq 1 ]; then
+                perror 'action: '"'$_command'"' not recognized!'"${NEWLINE}"
+                _command=help
+            fi
             ;;
     esac
     "$_command" "$@" || rc=$?
