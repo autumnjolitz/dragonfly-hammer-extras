@@ -232,7 +232,7 @@ by_attr () {
     local context=
     local pfs_attrib_pattern=
 
-    pfs_attrib_pattern="$(echo "$PFS_ATTRIBUTES" | sed 's|\n$||g' | tr ' ' '|')"
+    pfs_attrib_pattern="$(printf '%s' "$PFS_ATTRIBUTES" | trim | join_by_delimiter '|')"
 
     while [ $# -gt 0 ]
     do
@@ -255,7 +255,7 @@ by_attr () {
                 return 42
             ;;
             *)
-                if echo "${1:-}" | grep -qE "$pfs_attrib_pattern"; then
+                if echo "${1:-}" | grep -qxE "$pfs_attrib_pattern"; then
                     break
                 fi
                 target="${1}"
