@@ -291,7 +291,12 @@ by_attr () {
                 return 42
             ;;
             *)
-                if case :"${pfs_attrib_pattern}": in *":${1}:"*) true ;; *) false ;; esac ; then
+                if case :"${pfs_attrib_pattern}": in *":$(echo "${1}" | tr "$delim" ':'):"*) true ;; *) false ;; esac ; then
+                    # ambiguous case, use -- to seperate
+                    # paths from attributes!
+                    # if [ "$num_targets" -gt 1 ]; then
+                    #     perror 'warning: assuming "'"$(echo "${1}" | tr "$delim" ' ')"'" are attributes.'
+                    # fi
                     break
                 fi
                 target="${1}"
