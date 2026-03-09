@@ -43,7 +43,7 @@ shift
 hammer_cmd="${ARCHIVE_CTL_HAMMER_COMMAND:-hammer}"
 
 if [ "$(id -u)" != '0' ]; then
-    if [ "$AUTO_SUDO" != '1' ] || ! ([ "$AUTO_SUDO" != '1' ] && 2>/dev/null sudo -v) ; then
+    if [ "$AUTO_SUDO" = '0' ] || [ "$AUTO_SUDO" = '1' ] && ! 2>/dev/null sudo -v ; then
         perror 'error: requires superuser privileges!'
         exit 140
     fi
