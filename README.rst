@@ -23,8 +23,29 @@ Example topology:
 archive_ctl
 -------------
 
+In the following example, ``bin/archive_ctl.sh`` is installed at ``/usr/local/bin/archive-ctl``.
+
+.. code-block:: shell-session
+
+    dfly:~$ archive-ctl
+    /usr/local/bin/archive-ctl [ACTION] [...]
+
+    available actions:
+      in-pfs
+      list-mounts
+      pfs-id
+      is-snapshot
+      by-attr
+      find-mount-for-pfs
+      pfs-home
+      pfs-list
+
+  dfly:~$ archive-ctl
+
 by-attr
 ^^^^^^^^^
+
+``by-attr`` is meant to provide the missing unified interface to a PFS for getting/setting behaviors like the snapshot/pruning/reblocking configuration (``config``) or reading the pfs id ``id``.
 
 Status: Implemented
 
@@ -32,12 +53,13 @@ Status: Implemented
 .. code-block:: shell-session
 
     dfly:~$ ./bin/archive_ctl.sh by-attr --help
-    archive_ctl.sh PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
-    archive_ctl.sh PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
-    archive_ctl.sh PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
+    archive-ctl PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
+    archive-ctl PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
+    archive-ctl PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
 
     available attributes:
-        id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid
+        id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid, home
+
     dfly:~$
 
 
