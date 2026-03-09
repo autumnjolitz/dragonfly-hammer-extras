@@ -707,6 +707,7 @@ run () {
     local rc=0
     local _command="${1:-}"
     shift
+    _command="$(printf '%s\n' "$_command" | sed 's|-|_|g')"
     case "$archive_ctl_commands" in
         *"$_command"*)
             ;;
@@ -717,7 +718,7 @@ available commands: '"${NEWLINE}$(list_registered_commands archive_ctl | join_by
             return 44
             ;;
     esac
-    "$(printf '%s\n' "$_command" | sed 's|-|_|g')" "$@" || rc=$?
+    "$_command" "$@" || rc=$?
     return "$rc"
 }
 
