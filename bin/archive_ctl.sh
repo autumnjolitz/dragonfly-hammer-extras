@@ -3,12 +3,15 @@
 set -o pipefail || true
 set -eu
 
-perror () {
-    1>&2 printf '%s\n' "${@:-}"
-}
-
-
 DEBUG="${ARCHIVE_CTL_DEBUG:-}"
+
+ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB:-"$(dirname "$( realpath "$0")")"}"
+[ '1' = "${DEBUG:-}" ] && >&2 echo ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB}"
+
+# shellcheck source=bin/common.sh
+. "${ARCHIVE_CTL_LIB}/common.sh"  #
+
+
 AUTO_SUDO="${ARCHIVE_CTL_AUTO_SUDO:-}"
 
 while [ $# -gt 0 ]; do
@@ -28,30 +31,49 @@ while [ $# -gt 0 ]; do
 done
 
 _command="${1:-help}"
+case "${1:-help}" in
+    -h|--help|help)
+        _command=help
+    ;;
+esac
+
 shift
 
-hammer_cmd=hammer
+hammer_cmd="${ARCHIVE_CTL_HAMMER_COMMAND:-hammer}"
 
-if [ "x$(id -u)" != 'x0' ]; then
-    if [ x$AUTO_SUDO != 'x1' ] || ! (2>/dev/null sudo -v) ; then
+if [ "$(id -u)" != '0' ]; then
+    if [ "$AUTO_SUDO" != '1' ] || ! (2>/dev/null sudo -v) ; then
         perror 'error: requires superuser privileges!'
         exit 140
     fi
-    [ "x$DEBUG" = x1 ] && perror 'warning: not root, assuming sudo access'
-    hammer_cmd='sudo -H hammer'
+    [ "$DEBUG" = '1' ] && perror 'warning: not root, assuming sudo access'
+    hammer_cmd="sudo -H $hammer_cmd"
 fi
 
-if [ x$DEBUG = x1 ]; then
+PFS_ATTRIBUTES='id
+type
+state
+snapshots
+sync-beg-tid
+sync-end-tid
+shared-uuid
+unique-uuid
+label
+prune-min
+config
+fs-uuid'
+
+if [ "$DEBUG" = '1' ]; then
     set -x
 fi
 
 update () {
     local root="${1:-}"
-    if [ x$root = x ]; then
+    if [ "$root" = '' ]; then
         perror 'error: expected a mountpoint'
         return 2
     fi
-    if ! mount -t hammer | greq -qE ' '$root' '; then
+    if ! mount -t hammer | greq -qE ' '"$root"' '; then
         perror 'error: '"$root"' is not a mounted HAMMER filesystem!'
         return 2
     fi
@@ -64,15 +86,14 @@ update () {
 in-pfs () {
     local target="${1:-}"
     local rc=
-    local pfs_config=
-    if [ "x$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'missing PATH'
         return 254
     fi
-    if (>/dev/null eval $hammer_cmd pfs-status "${target}") then
+    if (>/dev/null eval "$hammer_cmd" pfs-status "${target}") then
         return 0
     fi
-    [ x$DEBUG = x1 ] && perror 'not a pfs: '"${target}"
+    [ "$DEBUG" = '1' ] && perror 'not a pfs: '"${target}"
     return 1
 }
 
@@ -83,7 +104,7 @@ list-mounts() {
 pfs-root () {
     local target="${1:-}"
     local next_target=
-    if [ x"$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'error: path not given to find a root for'
         return 3
     fi
@@ -93,7 +114,7 @@ pfs-root () {
     fi
     target="$(readlink -f "$target")"
     next_target="$(dirname "$target")"
-    while [ x$target != x$next_target ]
+    while [ "$target" != "$next_target" ]
     do
         case "$target" in
             */@@-1:[0-9][0-9][0-9][0-9][0-9]|*/@@0x*:[0-9][0-9][0-9][0-9][0-9])
@@ -134,7 +155,7 @@ pfs-id () {
         esac
     done
     local next_target=
-    if [ x"$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'error: path not given to find a root for'
         return 3
     fi
@@ -144,90 +165,58 @@ pfs-id () {
     fi
     local line=
     local pfs_id=$($hammer_cmd pfs-status "$target" | head -1 | rev | cut -d# -f1 | rev | cut -f1 -d' ')
-    if [ $_pad -eq 1 ]; then
+    if [ "$_pad" -eq 1 ]; then
         printf '%05d\n' "$pfs_id"
     else
         echo "$pfs_id"
     fi
 }
 
-_join_delim () {
-    local delim="${1:-,}"
-    shift
-    local line=
-    local result=
-    if [ ! -t 0 ]; then
-        while IFS=$'\n' read -r line
-        do
-            if [ "x${line}" = x ]; then
-                continue
-            fi
-            if [ "x$result" = x ]; then
-                result="$line"
-            else
-                result="${result}${delim}${line}"
-            fi
-        done < /dev/stdin
-        echo $result
-        return 0
-    fi
-    while [ $# -gt 0 ]; do
-        line="$1"
-        shift
-        if [ "x${line}" = x ]; then
-            continue
-        fi
-        if [ "x$result" = x ]; then
-            result="$line"
-        else
-            result="${result}${delim}${line}"
-        fi
-    done
-    echo "$result"
-}
 
-PFS_ATTRIBUTES='id
-type
-state
-snapshots
-sync-beg-tid
-sync-end-tid
-shared-uuid
-unique-uuid
-label
-prune-min
-config
-fs-uuid'
 
 is-snapshot () {
     local target="${1:-}"
-    if [ x"$target" = x ]; then
+    local rc=0
+    local txn_id=
+    local next_target=
+    if [ "$target" = '' ]; then
         perror 'missing target!'
         return 2
     fi
     shift
     local txn_id="${1:-}"
-    if [ x"$txn_id" = x ]; then
+    shift
+    if [ -h "$target" ]; then
+        rc=0
+        next_target="$(readlink "$target")" || rc=$?
+        while [ "$rc" -eq 0 ] && [ "$target" != "$next_target" ]; do
+            if case "$next_target" in /*) false ;; *) true ;; esac ; then
+                next_target="$(dirname "$target")/$next_target"
+            fi
+            [ "$DEBUG" = '1' ] && perror "$target"'->'"$next_target"
+            target="$next_target"
+            rc=0
+            next_target="$(readlink "$target")" || rc=$?
+        done
+    fi
+
+    case "$target" in
+        */@@0x*)
+            if [ "$txn_id" = '' ]; then
+                txn_id="$(echo "$target" | rev | cut -f1 -d/ | rev)"
+            fi
+        ;;
+    esac
+    target="$(pfs_home "$target")"
+    if case "$txn_id" in @@*:*) true ;; *) false ;; esac; then
+        txn_id="$(echo "$txn_id" | cut -f1 -d:)"
+    fi
+    if [ "$txn_id" = '' ]; then
         perror 'missing txn id!'
         return 2
     fi
-    case "$txn_id" in
-        */@@0x*:[0-9][0-9][0-9][0-9][0-9])
-        txn_id="$(echo "$txn_id" | rev | cut -f1 -d/ | rev | cut -f1 -d:)"
-        ;;
-        */@@0x*)
-        txn_id="$(echo "$txn_id" | rev | cut -f1 -d/ | rev)"
-        ;;
-        @@0x*:*)
-        txn_id="$(echo "$txn_id" | cut -f1 -d:)"
-        pfs_id="$(echo "$txn_id" | cut -f2 -d:)"
-        ;;
-        0x*)
-        txn_id="$(echo "$txn_id" | cut -f1 -d:)"
-        ;;
-    esac
     txn_id="$(echo "$txn_id" | sed 's|@@||g')"
-    eval $hammer_cmd snapls "$target" | cut -f1 | grep -qE "^$txn_id$"
+    eval "$hammer_cmd" snapls "$target" | cut -f1 | grep -qE "^$txn_id$"
 }
 
 attr-by () {
@@ -235,6 +224,7 @@ attr-by () {
     local target=
     local num_targets=0
     local targets=
+    local exe=
     local next_target=
     local pfs_attrib_pattern="$(echo $PFS_ATTRIBUTES | sed 's|\n$||g' | tr ' ' '|')"
 
@@ -246,7 +236,7 @@ attr-by () {
                 break
             ;;
             --)
-                if [ $num_targets -gt 0 ]; then
+                if [ "$num_targets" -gt 0 ]; then
                     shift
                     break
                 fi
@@ -263,12 +253,12 @@ attr-by () {
                     break
                 fi
                 target="${1}"
-                if [ ! -e "$target" -a ! -h "$target" ]; then
+                if [ ! -e "$target" ] && [ ! -h "$target" ]; then
                     perror "$target does not exist!"
                     return 1
                 fi
                 shift
-                if [ x"$target" = x ]; then
+                if [ "$target" = '' ]; then
                     targets="${target}"
                 else
                     targets="${targets}"$'\n'"${target}"
@@ -277,24 +267,24 @@ attr-by () {
             ;;
         esac
     done
-    if [ "$num_targets" -eq 0 -a "$_print_help" -ne 1 ]; then
+    if [ "$num_targets" -eq 0 ] && [ "$_print_help" -ne 1 ]; then
         perror 'error: path not given to get attributes for'
         _print_help=1
     fi
-    if [ $_print_help -eq 1 ]; then
-        local exe="$(basename "$0")"
+    exe="$(basename "$0")"
+    if [ "$_print_help" -eq 1 ]; then
         perror "$exe"' PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
 '"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
 '"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
 
 available attributes:
-    '"$(echo "$PFS_ATTRIBUTES" | _join_delim ', ' )"'
+    '"$(echo "$PFS_ATTRIBUTES" | join-by-delimiter ', ' )"'
 '
         return 4
     fi
 
     local rc=
-    if [ $num_targets -gt 1 ]; then
+    if [ "$num_targets" -gt 1 ]; then
         IFS=$'\n'
         for target in $targets
         do
@@ -309,16 +299,16 @@ available attributes:
         return 2
     fi
     local attr="${1:-}"
-    if [ x"$attr" = x ] || case "$attr" in -*) true ;; *) false ;; esac; then
+    if [ "$attr" = '' ] || case "$attr" in -*) true ;; *) false ;; esac; then
         perror 'error: attr not given to get attributes for'
-        perror 'attributes are: '"$(echo $PFS_ATTRIBUTES | xargs)"
+        perror 'attributes are: '"$(echo $PFS_ATTRIBUTES | join-by-delimiter ', ')"
         return 3
     fi
     shift
     local result=''
     local attr_result=
     if case "$attr" in *','*) true ;; *) false ;; esac; then
-        if [ x"$@" != x ]; then
+        if [ "$@" != '' ]; then
             perror 'wtf'
             return 55
         fi
@@ -329,7 +319,7 @@ available attributes:
             if case "$attr_result" in *,* ) true ;; *) false ;; esac ; then
                 attr_result='"'"$attr_result"'"'
             fi
-            if [ x"$result" = x ]; then
+            if [ "$result" = '' ]; then
                 result="${attr_result}"
             else
                 result="${result},${attr_result}"
@@ -348,12 +338,12 @@ available attributes:
                 has_set=1
                 shift
                 filename="${1:-}"
-                if [ x"$filename" = x ]; then
+                if [ "$filename" = '' ]; then
                     perror 'error: filename not given for value!'
                     return 55
                 fi
                 shift
-                if [ x"$filename" = 'x-' ]; then
+                if [ "$filename" = '-' ]; then
                     filename=/dev/stdin
                 fi
                 if [ ! -r "$filename" ]; then
@@ -361,7 +351,7 @@ available attributes:
                     return 55
                 fi
                 IFS= read -r newvalue < "$filename"
-                if [ "x$newvalue" = 'x' ]; then
+                if [ "$newvalue" = '' ]; then
                     perror 'warn: data from '"${filename}"' is empty. proceeding.'
                     exit 1
                 fi
@@ -373,13 +363,13 @@ available attributes:
                     perror 'error: missing value for --set!'
                     return 55
                 fi
-                if [ ! -t 0 -a x"${1}" = x- ]; then
+                if [ ! -t 0 -a "${1}" = '-' ]; then
                     IFS= read -r newvalue
                     set -- "$newvalue"
                 fi
                 case "$attr" in
                     label)
-                    newvalue="${@}"
+                    newvalue="$@"
                     set --
                     ;;
                     *)
@@ -394,7 +384,7 @@ available attributes:
         esac
     done
     rc=0
-    if [ $has_set -eq 1 ]; then
+    if [ "$has_set" -eq 1 ]; then
         case "$attr" in
             id|fs-uuid|state)
                 perror 'immutable! ignoring "'"$newvalue"'" !'
@@ -418,7 +408,7 @@ available attributes:
             snapshots)
             perror 'not implemented'
             return 201
-            if [ x$newvalue != x ]; then
+            if [ "$newvalue" != '' ]; then
                 >/dev/null $hammer_cmd \
                     pfs-update "$target" \
                     snapshots-clear || rc=$?
@@ -436,7 +426,7 @@ available attributes:
 
         esac
         if [ $rc -ne 0 ]; then
-            return $rc
+            return "$rc"
         fi
     fi
 
@@ -448,17 +438,15 @@ available attributes:
             eval $hammer_cmd info "$target" | grep -E '^[[:space:]]FSID' | rev | cut -d' ' -f1 | rev
         ;;
         type|state)
-        result="$(eval $hammer_cmd \
-            pfs-status "$target" | \
-            grep 'operating as a' | rev | cut -f1 -d' ' | rev)"
+        result="$(eval "$hammer_cmd" pfs-status "$target" | grep 'operating as a' | rev | cut -f1 -d' ' | rev)"
         if [ "$attr" = state ]; then
             if [ -h "$target" ]; then
             local next_target="$(readlink "$target")" || rc=$?
-            while [ $rc -eq 0 ] && [ x$target != x$next_target ]; do
+            while [ $rc -eq 0 ] && [ "$target" != "$next_target" ]; do
                 if case "$next_target" in /*) false ;; *) true ;; esac ; then
                     next_target="$(dirname $target)/$next_target"
                 fi
-                [ x$DEBUG = x1 ] && perror "$target"'->'"$next_target"
+                [ "$DEBUG" = '1' ] && perror "$target"'->'"$next_target"
                 target="$next_target"
                 rc=0
                 next_target="$(readlink "$target")" || rc=$?
@@ -467,10 +455,10 @@ available attributes:
 
             local context="$(basename "$target")"
             local parent="$(basename "$(dirname "$target")")"
-            if [ x"$parent" != x ]; then
+            if [ "$parent" != '' ]; then
                 context="$parent/$context"
             fi
-            [ x$DEBUG = x1 ] && perror "Evaluating context=$context on target=$target"
+            [ "$DEBUG" = '1' ] && perror "Evaluating context=$context on target=$target"
             local pfs_subtype=
             if is-snapshot "$target" "$context" ; then
                 pfs_subtype='SNAPSHOT'
@@ -480,17 +468,17 @@ available attributes:
 
                 ;;
                 */@@0x*:[0-9][0-9][0-9][0-9][0-9])
-                    if [ x"$pfs_subtype" = x ]; then
+                    if [ "$pfs_subtype" = '' ]; then
                         pfs_subtype=TRANSACTION
                     fi
                 ;;
                 */@@0x*)
-                if [ x"$pfs_subtype" = x ]; then
+                if [ "$pfs_subtype" = '' ]; then
                     pfs_subtype=TRANSACTION
                 fi
                 ;;
             esac
-            if [ x"$pfs_subtype" != x ]; then
+            if [ "$pfs_subtype" != '' ]; then
                 result="${result}-${pfs_subtype}"
             fi
             if [ ! -e "$target" ]; then
@@ -500,15 +488,15 @@ available attributes:
         echo "$result"
         ;;
         snapshots)
-        eval $hammer_cmd \
+        eval "$hammer_cmd" \
             pfs-status "$target" | \
             grep 'snapshots directory' | rev | cut -f1 -d' ' | rev
         ;;
         config)
-            (eval $hammer_cmd config "$target" | egrep -v '^\s*#') || true
+            (eval "$hammer_cmd" config "$target" | egrep -v '^\s*#') || true
         ;;
         *)
-        eval $hammer_cmd \
+        eval "$hammer_cmd" \
             pfs-status "$target" | \
             grep "$attr"'=' | cut -f2 -d= | tr -d \"
         ;;
@@ -524,7 +512,7 @@ PFS_HOME="$(printf '%s' "$PFS_HOME" | tr '\n' ':' | sed 's|::*|:|g;s|^:||g;s|:$|
 
 find-mount-for-pfs () {
     local target="${1:-}"
-    if [ x"$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'error: no PATH given.'
         return 1
     fi
@@ -539,7 +527,7 @@ find-mount-for-pfs () {
     if ! list-mounts | while IFS=$'\n' read line
     do
         mount_uuid=$(attr-by "$line" -- fs-uuid)
-        if [ x$mount_uuid = x$target_fs_uuid ]; then
+        if [ "$mount_uuid" = "$target_fs_uuid" ]; then
             echo "$line"
             break
         fi
@@ -559,14 +547,14 @@ pfs-home () {
     local pfs_id=
     local pfs_type=
     local txn_id='-1'
-    if [ x"$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'error: no PATH given.'
         return 1
     fi
     mount_point="$(find-mount-for-pfs "${target}")"
     pfs_id="$(pfs-id --pad "$target")"
     pfs_type=$(attr-by "$target" type )
-    if [ x"$mount_point" = x ]; then
+    if [ "$mount_point" = '' ]; then
         perror 'fatal: unable to find mount point for '"${target}"
         return 2
     fi
@@ -589,7 +577,7 @@ pfs-home () {
         else
             matchedfile="$(find "$(realpath "$maybe_pfs_home")" -lname '@@'"$(attr-by "$target" sync-end-tid)"':'"$pfs_id"'*' -print -quit)" || line=
         fi
-        if [ x"$matchedfile" != x ]; then
+        if [ "$matchedfile" != '' ]; then
             echo "$matchedfile"
             return 0
         fi
@@ -622,7 +610,7 @@ list-pfs () {
                 return 5
             ;;
             *)
-                if [ x"${1:-}" = x ]; then
+                if [ "${1:-}" = '' ]; then
                     perror 'no mounted hammer filesystems given!'
                     return 4
                 fi
@@ -640,13 +628,13 @@ list-pfs () {
             list-pfs $extra "${1}" || rc=$?
             shift
             if [ $rc -ne 0 ]; then
-                return $rc
+                return "$rc"
             fi
         done
         return 0
     fi
     target="${1:-}"
-    if [ x"$target" = x ]; then
+    if [ "$target" = '' ]; then
         perror 'error: no target given!'
         return 2
     fi
@@ -660,7 +648,7 @@ list-pfs () {
             ;;
         esac
     done
-    if [ $found -eq 0 ]; then
+    if [ "$found" -eq 0 ]; then
         perror 'not the direct mount!'
         return 2
     fi
@@ -695,69 +683,9 @@ list-pfs () {
 }
 
 
-
-typeof_pfs () {
-    local target="${1:-}"
-    local rc=0
-    local pfs_type=
-    if [ "x$target" = x ]; then
-        perror 'missing PFS for $1!'
-        return 254
-    fi
-    in-pfs "$target" || rc=$?
-    if [ "$rc" -ne 0 ]; then
-        return 1
-    fi
-    case "$($hammer_cmd pfs-status "$target")" in
-        *'operating as a SLAVE'*)
-            pfs_type=REPLICA
-        ;;
-        *'operating as a MASTER'*)
-            # might either be a primary or a snapshot
-            # on a primary
-            pfs_type=PRIMARY
-        ;;
-        *)
-            perror 'error: unknown PFS type!'
-            pfs_type=UNKNOWN
-        ;;
-    esac
-    rc=0
-    local next_target="$(readlink "$target")" || rc=$?
-    while [ $rc -eq 0 ] && [ x$target != x$next_target ]; do
-        if case "$next_target" in /*) false ;; *) true ;; esac ; then
-            next_target="$(dirname $target)/$next_target"
-        fi
-        [ x$DEBUG = x1 ] && perror "$target"'->'"$next_target"
-        target="$next_target"
-        rc=0
-        next_target="$(readlink "$target")" || rc=$?
-    done
-    local context="$(basename "$target")"
-    local parent="$(basename "$(dirname "$target")")"
-    if [ x"$parent" != x ]; then
-        context="$parent/$context"
-    fi
-    [ x$DEBUG = x1 ] && perror "Evaluating context=$context on target=$target"
-    case "$context" in
-        */@@-1:[0-9][0-9][0-9][0-9][0-9])
-
-        ;;
-        */@@0x*:[0-9][0-9][0-9][0-9][0-9])
-            pfs_type="${pfs_type}-TRANSACTION"
-        ;;
-        */@@0x*)
-            pfs_type="${pfs_type}-SNAPSHOT"
-        ;;
-    esac
-    if [ ! -e "$target" ]; then
-        pfs_type="$pfs_type-INACCESSIBLE"
-    fi
-    echo $pfs_type
-}
-
 list_replicas_for_pfs () {
-    local pfs=${}
+    perror 'unimplemented'
+    return 2
 }
 
 help () {
