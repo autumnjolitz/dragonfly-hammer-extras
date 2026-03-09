@@ -28,9 +28,23 @@ In the following example, ``bin/archive_ctl.sh`` is installed at ``/usr/local/bi
 .. code-block:: shell-session
 
     dfly:~$ archive-ctl
-    /usr/local/bin/archive-ctl [ACTION] [...]
+    /usr/local/bin/archive-ctl [-d | --debug] [--sudo] [ACTION] [...]
 
-    available actions:
+    General flags:
+        --sudo   use "sudo -H" when not superuser.
+
+    Debugging flags:
+        -d --debug   "set -x" in shell for debugging output.
+        --export-debug-internals     allow calling non-exported functions.
+
+    Environment variables:
+        ARCHIVE_CTL_AUTO_SUDO
+        ARCHIVE_CTL_DEBUG
+        ARCHIVE_CTL_EXPORT_DEBUG_INTERNALS
+        ARCHIVE_CTL_LIB - search path for common.sh et al.
+                          Defaults to "$(realpath "/usr/local/bin/archive-ctl")"
+
+    Available actions:
       in-pfs
       list-mounts
       pfs-id
