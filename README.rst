@@ -135,8 +135,12 @@ Status: Implemented
     archive-ctl PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
     archive-ctl PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
 
+    General flags:
+
+    -D --delim   character to use as a delimiter (defaults to ',')
+
     available attributes:
-        id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid, home
+    id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid, home
 
     dfly:~$
 
@@ -164,9 +168,10 @@ Example:
     SLAVE-SNAPSHOT
     dfly:~$ archive_ctl by-attr /pools/2.backup/@@0x00000001b3e06b70:00002 state
     SLAVE-TRANSACTION
-    dfly:~$ archive_ctl pfs-home /Archive2Backup/@@0x00000001b3e06b70:00003
-    /Archive2Backup/pfs/volatile
-    dfly:~$
+    dfly:~$ archive_ctl pfs-home /pools/1/@@0x00000001b3e06b70:00003
+    /pools/1/pfs/volatile
+    dfly:~$ archive-ctl  by-attr -D '\t'  ~/null-frst-mount/ id unique-uuid
+    00001   568df5e4-1747-11f1-b598-9d6b0000024b
 
 mirror
 ^^^^^^^^
