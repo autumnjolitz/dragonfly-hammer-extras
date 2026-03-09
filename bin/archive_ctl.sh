@@ -107,16 +107,16 @@ update () {
 # shellcheck disable=SC2329
 in_pfs () {
     local target="${1:-}"
-    local rc=
+    local rc=0
     if [ "$target" = '' ]; then
         perror 'missing PATH'
         return 254
     fi
-    if (>/dev/null eval "$hammer_cmd" pfs-status "${target}") then
+    >/dev/null eval "$hammer_cmd" pfs-status "${target}" || rc=$?
+    if [ "$rc" -eq 0 ]; then
         return 0
     fi
-    [ "$DEBUG" = '1' ] && perror 'not a pfs: '"${target}"
-    return 1
+    return "$rc"
 }
 register_command archive_ctl in_pfs
 
@@ -175,7 +175,7 @@ Returns the pfs id of PATH
 
     local next_target=
     if [ "$target" = '' ]; then
-        perror 'error: path not given to find a root for'
+    perror 'error: path not given to find a root for'
         return 3
     fi
     if ! in_pfs "$target"; then
@@ -250,8 +250,7 @@ by_attr () {
     local context=
     local pfs_attrib_pattern=
 
-    pfs_attrib_pattern="$(printf '%s\n' "$PFS_ATTRIBUTES" | trim | join_by_delimiter '|')"
-
+    pfs_attrib_pattern="$(printf '%s\n' "$PFS_ATTRIBUTES" | trim | join_by_delimiter ':')"
     while [ $# -gt 0 ]
     do
         case "${1:-}" in
@@ -273,13 +272,13 @@ by_attr () {
                 return 42
             ;;
             *)
-                if echo "${1:-}" | grep -qxE "$pfs_attrib_pattern"; then
+                if case :"${pfs_attrib_pattern}": in *":${1}:"*) true ;; *) false ;; esac ; then
                     break
                 fi
                 target="${1}"
                 if [ ! -e "$target" ] && [ ! -h "$target" ]; then
-                    perror "$target does not exist!"
-                    return 1
+                    perror 'warning: '"${target}"' does not exist!'
+                    # return 1
                 fi
                 shift
                 if [ "$target" = '' ]; then
@@ -287,7 +286,7 @@ by_attr () {
                 else
                     targets="${targets}${NEWLINE}${target}"
                 fi
-                num_targets="$(( "$num_targets" + 1 ))"
+                num_targets="$(( num_targets + 1 ))"
             ;;
         esac
     done
@@ -307,6 +306,27 @@ available attributes:
         return 4
     fi
 
+    local attr="${1:-}"
+    local maybe_attr=
+    local _has_bad_attr=0
+    if [ "${attr}" = '' ] ; then
+        perror 'error: attr not given to get attributes for'
+        perror 'attributes are: '"$(echo "$PFS_ATTRIBUTES" | join_by_delimiter ', ')"
+        return 3
+    else
+        for maybe_attr in $(echo "${attr}" | tr ',' '\n')
+        do
+            if ! case :"${pfs_attrib_pattern}": in *":${maybe_attr}:"*) true ;; *) false ;; esac ; then
+                perror "${maybe_attr}"' is not a valid attribute!'
+                _has_bad_attr=1
+            fi
+        done
+        if [ "${_has_bad_attr}" -eq 1 ]; then
+            return 3
+        fi
+    fi
+
+
     local rc=
     if [ "$num_targets" -gt 1 ]; then
         IFS="${NEWLINE}"
@@ -319,14 +339,8 @@ available attributes:
     fi
 
     if ! in_pfs "$target"; then
-        perror 'error: not a path in a PFS!'
+        perror 'error: '"$target"' is not a path in a PFS!'
         return 2
-    fi
-    local attr="${1:-}"
-    if [ "$attr" = '' ] || case "$attr" in -*) true ;; *) false ;; esac; then
-        perror 'error: attr not given to get attributes for'
-        perror 'attributes are: '"$(echo "$PFS_ATTRIBUTES" | join_by_delimiter ', ')"
-        return 3
     fi
     shift
     local result=''
