@@ -1,2 +1,3 @@
 external-sources=true
-ignore=SC2001
+shell=dash
+disable=SC2155

@@ -1,7 +1,7 @@
 # source into a a script
 
 here () {
-    echo "$(dirname "$( realpath "$0")")"
+    dirname "$( realpath "$0")"
 }
 
 perror () {
@@ -35,10 +35,10 @@ can also accept stdin so you can pipe to it.
         esac
     done
     if [ ! -t 0 ]; then
-        while IFS=$'\n' read -r line
+        while IFS="${NEWLINE}" read -r line
         do
             line="$(printf '%s\n' "$line" | sed 's|^ *||g;s| *$||g')"
-            if [ $_skip_empty -eq 1 -a "$line" = '' ]; then
+            if [ $_skip_empty -eq 1 ] && [ "$line" = '' ]; then
                 continue
             fi
             echo "$line"
@@ -68,7 +68,11 @@ sys.argv = sys.argv[i+1: ]
 '"${s}" -- "${@}"
 }
 
-join-by-delimiter () {
+NEWLINE='
+'
+export NEWLINE
+
+join_by_delimiter () {
     local line=
     local result=
     local _skip_empty=1
@@ -84,12 +88,12 @@ join-by-delimiter () {
                 shift
             ;;
             -h|-'?'|--help)
-                perror 'join-by-delimiter -Ee [DELIM] [VAL1] [VAL2] ...
-join-by-delimiter [--skip-empty | --keep-empty ] [DELIM] [VAL1] [VAL2] ...
+                perror 'join_by_delimiter -Ee [DELIM] [VAL1] [VAL2] ...
+join_by_delimiter [--skip-empty | --keep-empty ] [DELIM] [VAL1] [VAL2] ...
 
 can also accept stdin so you can pipe to it:
 
-echo $'"'"'foo\n\nbar\n'"'"' | '"$0"' join-by-delimiter -E '"'\n'"'
+echo $'"'"'foo\n\nbar\n'"'"' | '"$0"' join_by_delimiter -E '"'\n'"'
 
 '
                 return 1
@@ -107,14 +111,15 @@ echo $'"'"'foo\n\nbar\n'"'"' | '"$0"' join-by-delimiter -E '"'\n'"'
     done
     local pattern='%s'"${delim}"'%s\n'
     if [ ! -t 0 ]; then
-        while IFS=$'\n' read -r line
+        while IFS="${NEWLINE}" read -r line
         do
-            if [ $_skip_empty -eq 1 -a "x${line}" = x ]; then
+            if [ $_skip_empty -eq 1 ] && [ "${line}" = '' ]; then
                 continue
             fi
-            if [ "x$result" = x ]; then
+            if [ "$result" = '' ]; then
                 result="$line"
             else
+                # shellcheck disable=2059
                 result="$(printf "$pattern" "${result}" "${line}")"
             fi
         done < /dev/stdin
@@ -124,12 +129,13 @@ echo $'"'"'foo\n\nbar\n'"'"' | '"$0"' join-by-delimiter -E '"'\n'"'
     while [ $# -gt 0 ]; do
         line="$1"
         shift
-        if [ $_skip_empty -eq 1 -a "x${line}" = x ]; then
+        if [ $_skip_empty -eq 1 ] && [ "${line}" = '' ]; then
             continue
         fi
-        if [ "x$result" = x ]; then
+        if [ "$result" = '' ]; then
             result="$line"
         else
+            # shellcheck disable=SC2059
             result="$(printf "$pattern" "${result}" "${line}")"
         fi
     done
