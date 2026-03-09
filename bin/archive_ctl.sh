@@ -9,9 +9,12 @@ DEBUG="${ARCHIVE_CTL_DEBUG:-}"
 ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB:-"$(dirname "$( realpath "$0")")"}"
 [ '1' = "${DEBUG:-}" ] && >&2 echo ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB}"
 
+default_commands_delim=-
+
 # shellcheck source=bin/common.sh
 . "${ARCHIVE_CTL_LIB}/common.sh"
 
+archive_ctl_commands=''
 
 AUTO_SUDO="${ARCHIVE_CTL_AUTO_SUDO:-}"
 
@@ -30,15 +33,14 @@ while [ $# -gt 0 ]; do
         ;;
     esac
 done
-
-_command="${1:-help}"
 case "${1:-help}" in
     -h|--help|help)
-        _command=help
+        if [ $# -gt 0 ]; then
+            shift
+        fi
+        set -- help "$@"
     ;;
 esac
-
-shift
 
 hammer_cmd="${ARCHIVE_CTL_HAMMER_COMMAND:-hammer}"
 
@@ -71,7 +73,6 @@ PFS_HOME='/pfs/
 '"${PFS_HOME:-}"
 PFS_HOME="$(printf '%s' "$PFS_HOME" | tr '\n' ':' | sed 's|::*|:|g;s|^:||g;s|:$||g' | tr : '\n')"
 
-
 if [ "$DEBUG" = '1' ]; then
     set -x
 fi
@@ -92,6 +93,7 @@ update () {
         return 2
     fi
 }
+# register_command archive_ctl update
 
 # shellcheck disable=SC2329
 in_pfs () {
@@ -107,11 +109,13 @@ in_pfs () {
     [ "$DEBUG" = '1' ] && perror 'not a pfs: '"${target}"
     return 1
 }
+register_command archive_ctl in_pfs
 
 # shellcheck disable=SC2329
 list_mounts() {
     mount -t hammer -p | cut -f2
 }
+register_command archive_ctl list_mounts
 
 # shellcheck disable=SC2329
 pfs_id () {
@@ -167,7 +171,7 @@ pfs_id () {
         echo "$pfs_id"
     fi
 }
-
+register_command archive_ctl pfs_id
 
 # shellcheck disable=SC2329
 is_snapshot () {
@@ -214,6 +218,7 @@ is_snapshot () {
     txn_id="$(printf '%s' "${txn_id}" | sed 's|@@||g')"
     eval "$hammer_cmd" snapls "$target" | cut -f1 | grep -qE "^$txn_id$"
 }
+register_command archive_ctl is_snapshot
 
 # shellcheck disable=SC2329
 by_attr () {
@@ -411,15 +416,15 @@ available attributes:
             snapshots)
             perror 'not implemented'
             return 201
-            if [ "$newvalue" != '' ]; then
-                >/dev/null $hammer_cmd \
-                    pfs-update "$target" \
-                    snapshots-clear || rc=$?
-            else
-                >/dev/null $hammer_cmd \
-                    pfs-update "$target" \
-                    "$attr"="$newvalue" || rc=$?
-            fi
+            # if [ "$newvalue" = '' ]; then
+            #     >/dev/null $hammer_cmd \
+            #         pfs-update "$target" \
+            #         snapshots-clear || rc=$?
+            # else
+            #     >/dev/null $hammer_cmd \
+            #         pfs-update "$target" \
+            #         "$attr"="$newvalue" || rc=$?
+            # fi
             ;;
             *)
             >/dev/null $hammer_cmd \
@@ -505,6 +510,7 @@ available attributes:
         ;;
     esac
 }
+register_command archive_ctl by_attr
 
 # shellcheck disable=SC2329
 find_mount_for_pfs () {
@@ -533,6 +539,7 @@ find_mount_for_pfs () {
         return 1
     fi
 }
+register_command archive_ctl find_mount_for_pfs
 
 # shellcheck disable=SC2329
 pfs_home () {
@@ -584,6 +591,7 @@ pfs_home () {
         echo "${mount_point}/@@-1:${pfs_id}"
     fi
 }
+register_command archive_ctl pfs_home
 
 # shellcheck disable=SC2329
 pfs_list () {
@@ -677,23 +685,40 @@ pfs_list () {
         fi
     done
 }
+register_command archive_ctl pfs_list
 
 # shellcheck disable=SC2329
 list_replicas_for_pfs () {
     perror 'unimplemented'
     return 2
 }
+# register_command archive_ctl list_replicas_for_pfs
 
 # shellcheck disable=SC2329
 help () {
     perror "$0"' [ACTION] [...]
-        upgrade - upgrades an archive to be a primary
-        downgrade
-        in-pfs - return 0 if is a PFS or within a PFS
 
+available actions: '"${NEWLINE}  $(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"'
 '
 }
+register_command archive_ctl help
 
-rc=$?
-"$(printf '%s\n' "$_command" | sed 's|-|_|g')" "$@" || rc=$?
-exit "$rc"
+run () {
+    local rc=0
+    local _command="${1:-}"
+    shift
+    case "$archive_ctl_commands" in
+        *"$_command"*)
+            ;;
+        *)
+            perror "$_command"' not recognized!
+
+available commands: '"${NEWLINE}$(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"
+            return 44
+            ;;
+    esac
+    "$(printf '%s\n' "$_command" | sed 's|-|_|g')" "$@" || rc=$?
+    return "$rc"
+}
+
+run "$@"
