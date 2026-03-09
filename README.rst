@@ -80,7 +80,9 @@ Example:
 pfs-home
 ^^^^^^^^^^
 
-Discover the probable canonical top level PFS symbolic link (formatted as ``@@-1:%05d`` or ``@@0x0123456789abcdef:%05d``) that resides on the root PFS (aka PFS#0).
+Discover the probable canonical top level PFS symbolic link (which points to a destination filename of the format ``@@-1:%05d`` or ``@@0x0123456789abcdef:%05d``) that resides on the root PFS (aka PFS#0).
+
+HAMMER creates a canonical PFS link like ``logs`` which we normally put at a mount point under ``/pfs`` (Example: ``/pools/1/pfs/logs`` points to ``@@-1:00001\n``)
 
 Checks the following paths from the mount point of the HAMMER filesystem:
 
