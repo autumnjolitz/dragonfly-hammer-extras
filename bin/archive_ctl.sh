@@ -252,7 +252,8 @@ by_attr () {
     local attr=
     local maybe_attr=
     local _has_bad_attr=0
-    local delim=','
+    local delim=
+    local default_delim=','
     local maybe_delim=
     local _break_at_first_attribute=1
 
@@ -296,7 +297,7 @@ by_attr () {
                 return 42
             ;;
             *)
-                if case :"${pfs_attrib_pattern}": in *":$(echo "${1}" | tr "$delim" ':'):"*) true ;; *) false ;; esac ; then
+                if [ "$_break_at_first_attribute" -eq 1 ] && case :"${pfs_attrib_pattern}": in *":$(echo "${1}" | tr "${delim:-$default_delim}" ':'):"*) true ;; *) false ;; esac ; then
                     # ambiguous case, use -- to seperate
                     # paths from attributes!
                     # if [ "$num_targets" -gt 1 ]; then
@@ -323,6 +324,7 @@ by_attr () {
         perror 'error: path not given to get attributes for'
         _print_help=1
     fi
+    escaped_default_delim="$(printf '%s' "$default_delim")"
     exe="$(basename "$0")"
     if [ "$_print_help" -eq 1 ]; then
         perror "$exe"' PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
@@ -331,13 +333,14 @@ by_attr () {
 
 General flags:
 
--D --delim'"${TAB}"' character to use as a delimiter
+-D --delim'"${TAB}"' character to use as a delimiter (defaults to '"'${escaped_default_delim}'"')
 
 available attributes:
     '"$(echo "$PFS_ATTRIBUTES" | join_by_delimiter ', ' )"'
 '
         return 4
     fi
+    delim="${delim:-$default_delim}"
 
     while [ $# -gt 0 ]; do
         case "${1}" in
