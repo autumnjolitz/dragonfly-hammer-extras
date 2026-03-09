@@ -277,6 +277,11 @@ by_attr () {
                     return 2
                 fi
                 shift
+                case "${maybe_delim}" in
+                    \\*)
+                        maybe_delim="$(printf '%b' "${maybe_delim}")"
+                    ;;
+                esac
                 delim="${maybe_delim}"
                 if [ "$(printf '%s' "$delim" | wc -c)" -gt 1 ]; then
                     perror 'delimiter may not exceed one character!'
