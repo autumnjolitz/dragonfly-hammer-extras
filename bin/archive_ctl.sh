@@ -254,6 +254,11 @@ by_attr () {
     local _has_bad_attr=0
     local delim=','
     local maybe_delim=
+    local _break_at_first_attribute=1
+
+    if case "$*" in *' -- '*) true ;; *) false ;; esac; then
+        _break_at_first_attribute=0
+    fi
 
     pfs_attrib_pattern="$(printf '%s\n' "$PFS_ATTRIBUTES" | trim | join_by_delimiter ':')"
     while [ $# -gt 0 ]
@@ -323,6 +328,10 @@ by_attr () {
         perror "$exe"' PATH ATTRIBUTE [--set VALUE | --set-from FILENAME ]
 '"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE
 '"$exe"' PATH1 [PATH2 [... PATHN]] [--] ATTRIBUTE1,ATTRIBUTE2,ATTRIBUTEN
+
+General flags:
+
+-D --delim'"${TAB}"' character to use as a delimiter
 
 available attributes:
     '"$(echo "$PFS_ATTRIBUTES" | join_by_delimiter ', ' )"'
