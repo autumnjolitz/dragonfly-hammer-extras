@@ -232,7 +232,7 @@ by_attr () {
     local context=
     local pfs_attrib_pattern=
 
-    pfs_attrib_pattern="$(printf '%s' "$PFS_ATTRIBUTES" | trim | join_by_delimiter '|')"
+    pfs_attrib_pattern="$(printf '%s\n' "$PFS_ATTRIBUTES" | trim | join_by_delimiter '|')"
 
     while [ $# -gt 0 ]
     do
