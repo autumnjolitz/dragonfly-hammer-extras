@@ -75,12 +75,12 @@ config
 fs-uuid
 home'
 
-PFS_HOME='/pfs/
+pfs_home_search_paths='/pfs/
 /.pfs/
 /.archive_config/pfs/
-/bind/PFS FS
-'"${PFS_HOME:-}"
-PFS_HOME="$(printf '%s' "$PFS_HOME" | tr '\n' ':' | sed 's|::*|:|g;s|^:||g;s|:$||g' | tr : '\n')"
+'"${ARCHIVE_CTL_PFS_SEARCH_PATHS:-}"
+
+pfs_home_search_paths="$(printf '%s' "$pfs_home_search_paths" | tr '\n' ':' | sed 's|::*|:|g;s|^:||g;s|:$||g' | tr : '\n')"
 
 if [ "$DEBUG" = '1' ]; then
     set -x
@@ -137,6 +137,16 @@ pfs_id () {
                 _pad=1
                 shift
             ;;
+            --help|-h)
+                perror 'pfs-id [-p | --pad] PATH
+
+General flags:
+    -p --pad'"${TAB}"' pad out the id to match '"'"'%05d'"'"'
+
+Returns the pfs id of PATH
+'
+                return 2
+                ;;
             -*)
                 perror 'unknown argument '"${1}"'!'
                 return 4
@@ -583,7 +593,7 @@ pfs_home () {
     fi
 
     IFS="${NEWLINE}"
-    for maybe_home in ${PFS_HOME}
+    for maybe_home in ${pfs_home_search_paths}
     do
         IFS="$OIFS"
         maybe_home="$(printf "%s\n" "$maybe_home" | sed 's|^/||g')"
@@ -716,6 +726,9 @@ help () {
     # shellcheck disable=SC2016
     perror "$0"' [-d | --debug] [--sudo] [ACTION] [...]
 
+A more fluent interface for managing HAMMER (and hopefully later HAMMER2)
+mirroring and configuration.
+
 General flags:
     --sudo'"${TAB}"' use "sudo -H" when not superuser.
 
@@ -727,8 +740,12 @@ Environment variables:
     ARCHIVE_CTL_AUTO_SUDO
     ARCHIVE_CTL_DEBUG
     ARCHIVE_CTL_EXPORT_DEBUG_INTERNALS
+    ARCHIVE_CTL_PFS_SEARCH_PATHS - additional colon delimited paths
+                      to search for canonical PFS symbolic links. Defaults to empty.
     ARCHIVE_CTL_LIB - search path for common.sh et al.
                       Defaults to "$(realpath "'"$0"'")"
+
+Canonical PFS search paths are:'"${NEWLINE}${TAB}'$(printf '%s' "$pfs_home_search_paths" | tr '\n' ':')'"'
 
 Available actions: '"${NEWLINE}  $(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"'
 '
@@ -740,8 +757,8 @@ run () {
     local _command="${1:-}"
     shift
     _command="$(printf '%s\n' "$_command" | sed 's|-|_|g')"
-    case "$archive_ctl_commands" in
-        *"$_command"*)
+    case ":${archive_ctl_commands}:" in
+        *":${_command}:"*)
             ;;
         *)
             if ! [ "${archive_ctl_export_internals:-0}" -eq 1 ]; then
