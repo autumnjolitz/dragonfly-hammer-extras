@@ -249,6 +249,11 @@ by_attr () {
     local next_target=
     local context=
     local pfs_attrib_pattern=
+    local attr=
+    local maybe_attr=
+    local _has_bad_attr=0
+    local delim=','
+    local maybe_delim=
 
     pfs_attrib_pattern="$(printf '%s\n' "$PFS_ATTRIBUTES" | trim | join_by_delimiter ':')"
     while [ $# -gt 0 ]
@@ -257,6 +262,20 @@ by_attr () {
             --help|-h|-'?')
                 _print_help=1
                 break
+            ;;
+            -D|--delim)
+                shift
+                maybe_delim="${1:-}"
+                if [ "$maybe_delim" = '' ]; then
+                    perror 'missing delimiter value!'
+                    return 2
+                fi
+                shift
+                delim="${maybe_delim}"
+                if [ "$(printf '%s' "$delim" | wc -c)" -gt 1 ]; then
+                    perror 'delimiter may not exceed one character!'
+                    return 2
+                fi
             ;;
             --)
                 if [ "$num_targets" -gt 0 ]; then
@@ -306,24 +325,45 @@ available attributes:
         return 4
     fi
 
-    local attr="${1:-}"
-    local maybe_attr=
-    local _has_bad_attr=0
+    attr="${1:-}"
+    while [ $# -gt 0 ]; do
+        case "${1}" in
+            --*)
+                break
+                ;;
+            *)
+                maybe_attr="${1}"
+                shift
+                if ! case :"${pfs_attrib_pattern}": in *":${maybe_attr}:"*) true ;; *) false ;; esac ; then
+                    perror 'error: unknown attribute '"${1}"'!'
+                    return 5
+                fi
+                if [ "$attr" = '' ]; then
+                    attr="$maybe_attr"
+                else
+                    attr="${attr}${delim}${maybe_attr}"
+                fi
+            ;;
+        esac
+    done
+
     if [ "${attr}" = '' ] ; then
         perror 'error: attr not given to get attributes for'
         perror 'attributes are: '"$(echo "$PFS_ATTRIBUTES" | join_by_delimiter ', ')"
         return 3
-    else
-        for maybe_attr in $(echo "${attr}" | tr ',' '\n')
-        do
-            if ! case :"${pfs_attrib_pattern}": in *":${maybe_attr}:"*) true ;; *) false ;; esac ; then
-                perror "${maybe_attr}"' is not a valid attribute!'
-                _has_bad_attr=1
-            fi
-        done
-        if [ "${_has_bad_attr}" -eq 1 ]; then
-            return 3
+    fi
+    # if case "$attr" in *"${delim}"*) true ;; *) false ;; esac; then
+
+    # fi
+    for maybe_attr in $(echo "${attr}" | tr "${delim}" '\n')
+    do
+        if ! case :"${pfs_attrib_pattern}": in *":${maybe_attr}:"*) true ;; *) false ;; esac ; then
+            perror "${maybe_attr}"' is not a valid attribute!'
+            _has_bad_attr=1
         fi
+    done
+    if [ "${_has_bad_attr}" -eq 1 ]; then
+        return 3
     fi
 
 
@@ -351,22 +391,22 @@ available attributes:
     local filename=
     local parent=
 
-    if case "$attr" in *','*) true ;; *) false ;; esac; then
+    if case "$attr" in *"${delim}"*) true ;; *) false ;; esac; then
         if [ $# -ne 0 ]; then
             perror 'wtf'
             return 55
         fi
         rc=0
-        for attr in $(echo "$attr" | tr ',' '\n')
+        for attr in $(echo "$attr" | tr "${delim}" '\n')
         do
             attr_result="$(by_attr "$target" "$attr")"
-            if case "$attr_result" in *,* ) true ;; *) false ;; esac ; then
+            if case "$attr_result" in *"${delim}"* ) true ;; *) false ;; esac ; then
                 attr_result='"'"$attr_result"'"'
             fi
             if [ "$result" = '' ]; then
                 result="${attr_result}"
             else
-                result="${result},${attr_result}"
+                result="${result}${delim}${attr_result}"
             fi
         done
         echo "$result"
@@ -419,8 +459,8 @@ available attributes:
                 esac
             ;;
             *)
-                perror 'error: unknown argument '"${1:-}"'!'
-                return 5
+            perror 'error: unknown argument '"${1:-}"'!'
+            return 5
             ;;
         esac
     done
