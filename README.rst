@@ -170,9 +170,9 @@ Example:
     SLAVE-TRANSACTION
     dfly:~$ archive_ctl pfs-home /pools/1/@@0x00000001b3e06b70:00003
     /pools/1/pfs/volatile
-    dfly:~$ archive-ctl  by-attr -D '\t'  ~/null-frst-mount/ id unique-uuid
+    dfly:~$ archive-ctl  by-attr -D '\t'  example-null-mount/ id unique-uuid
     00001   568df5e4-1747-11f1-b598-9d6b0000024b
-    dfly:~$ archive-ctl  by-attr -D '\t'  ~/mass_storage/ id unique-uuid | cut -f2
+    dfly:~$ archive-ctl  by-attr -D '\t'  example-null-mount/ id unique-uuid | cut -f2
     568df5e4-1747-11f1-b598-9d6b0000024b
 
 mirror
