@@ -382,7 +382,6 @@ available attributes:
         perror 'error: '"$target"' is not a path in a PFS!'
         return 2
     fi
-    shift
     local result=''
     local attr_result=
     local next_target=
