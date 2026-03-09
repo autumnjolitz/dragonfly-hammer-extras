@@ -140,7 +140,7 @@ Status: Implemented
     -D --delim   character to use as a delimiter (defaults to ',')
 
     available attributes:
-    id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid, home
+        id, type, state, snapshots, sync-beg-tid, sync-end-tid, shared-uuid, unique-uuid, label, prune-min, config, fs-uuid, home
 
     dfly:~$
 
@@ -172,6 +172,8 @@ Example:
     /pools/1/pfs/volatile
     dfly:~$ archive-ctl  by-attr -D '\t'  ~/null-frst-mount/ id unique-uuid
     00001   568df5e4-1747-11f1-b598-9d6b0000024b
+    dfly:~$ archive-ctl  by-attr -D '\t'  ~/mass_storage/ id unique-uuid | cut -f2
+    568df5e4-1747-11f1-b598-9d6b0000024b
 
 mirror
 ^^^^^^^^
