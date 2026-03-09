@@ -64,7 +64,8 @@ unique-uuid
 label
 prune-min
 config
-fs-uuid'
+fs-uuid
+home'
 
 PFS_HOME='/pfs/
 /.pfs/
@@ -411,7 +412,11 @@ available attributes:
             return 201
             ;;
             config)
-
+            printf '%s\n' "$newvalue" | eval "$hammer_cmd" pfs config /dev/stdin || rc=$?
+            ;;
+            home)
+            perror 'not implemented'
+            return 201
             ;;
             snapshots)
             perror 'not implemented'
@@ -440,7 +445,10 @@ available attributes:
 
     case "$attr" in
         id)
-            pfs_id --pad "$target"
+            run pfs-id --pad "$target"
+        ;;
+        home)
+            run pfs-home "$target"
         ;;
         fs-uuid)
             eval "$hammer_cmd" info "$target" | grep -E '^[[:space:]]FSID' | rev | cut -d' ' -f1 | rev
