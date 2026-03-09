@@ -335,7 +335,7 @@ available attributes:
                 maybe_attr="${1}"
                 shift
                 if ! case :"${pfs_attrib_pattern}": in *":${maybe_attr}:"*) true ;; *) false ;; esac ; then
-                    perror 'error: unknown attribute '"${1}"'!'
+                    perror 'error: unknown attribute '"${maybe_attr}"'!'
                     return 5
                 fi
                 if [ "$attr" = '' ]; then
