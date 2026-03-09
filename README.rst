@@ -56,6 +56,68 @@ In the following example, ``bin/archive_ctl.sh`` is installed at ``/usr/local/bi
 
   dfly:~$ archive-ctl
 
+pfs-id
+^^^^^^^^
+
+.. code-block:: shell-session
+
+    dfly:~ pfs-id -h
+    pfs-id [-p | --pad] PATH
+
+    General flags:
+        -p --pad     pad out the id to match '%05d'
+
+    Returns the pfs id of PATH
+
+
+Example:
+
+.. code-block:: shell-session
+
+    dfly:~$ archive-ctl pfs-id --pad
+    00001
+
+pfs-home
+^^^^^^^^^^
+
+Discover the probable canonical top level PFS symbolic link (formatted as ``@@-1:%05d`` or ``@@0x0123456789abcdef:%05d``) that resides on the root PFS (aka PFS#0).
+
+Checks the following paths from the mount point of the HAMMER filesystem:
+
+- /pfs/
+
+- /.pfs/
+
+- /.archive_config/pfs/
+
+Add to the search paths via ``ARCHIVE_CTL_PFS_SEARCH_PATHS``.
+
+Example:
+
+.. code-block:: shell-session
+
+    dfly:~$ $ archive-ctl pfs-home /exports/pfs/logs/
+    /pools/1/pfs/logs
+
+
+in-pfs
+^^^^^^^^
+
+Example for a PFS:
+
+.. code-block:: shell-session
+
+    dfly:~$ archive-ctl in-pfs /pools/1/pfs/logs ; echo $?
+    0
+
+
+Example outside a PFS:
+
+.. code-block:: shell-session
+
+    dfly:~$ 2>/dev/null archive-ctl in-pfs /tmp ; echo $?
+    1
+
 by-attr
 ^^^^^^^^^
 
