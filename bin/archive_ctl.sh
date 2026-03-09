@@ -5,11 +5,12 @@ set -eu
 
 DEBUG="${ARCHIVE_CTL_DEBUG:-}"
 
+# shellcheck source-path=SCRIPTDIR
 ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB:-"$(dirname "$( realpath "$0")")"}"
 [ '1' = "${DEBUG:-}" ] && >&2 echo ARCHIVE_CTL_LIB="${ARCHIVE_CTL_LIB}"
 
 # shellcheck source=bin/common.sh
-. "${ARCHIVE_CTL_LIB}/common.sh"  #
+. "${ARCHIVE_CTL_LIB}/common.sh"
 
 
 AUTO_SUDO="${ARCHIVE_CTL_AUTO_SUDO:-}"
@@ -42,7 +43,7 @@ shift
 hammer_cmd="${ARCHIVE_CTL_HAMMER_COMMAND:-hammer}"
 
 if [ "$(id -u)" != '0' ]; then
-    if [ "$AUTO_SUDO" != '1' ] || ! (2>/dev/null sudo -v) ; then
+    if [ "$AUTO_SUDO" != '1' ] || ! ([ "$AUTO_SUDO" != '1' ] && 2>/dev/null sudo -v) ; then
         perror 'error: requires superuser privileges!'
         exit 140
     fi
@@ -226,7 +227,7 @@ attr-by () {
     local targets=
     local exe=
     local next_target=
-    local pfs_attrib_pattern="$(echo $PFS_ATTRIBUTES | sed 's|\n$||g' | tr ' ' '|')"
+    local pfs_attrib_pattern="$(echo "$PFS_ATTRIBUTES" | sed 's|\n$||g' | tr ' ' '|')"
 
     while [ $# -gt 0 ]
     do
@@ -301,7 +302,7 @@ available attributes:
     local attr="${1:-}"
     if [ "$attr" = '' ] || case "$attr" in -*) true ;; *) false ;; esac; then
         perror 'error: attr not given to get attributes for'
-        perror 'attributes are: '"$(echo $PFS_ATTRIBUTES | join-by-delimiter ', ')"
+        perror 'attributes are: '"$(echo "$PFS_ATTRIBUTES" | join-by-delimiter ', ')"
         return 3
     fi
     shift
@@ -328,6 +329,7 @@ available attributes:
         echo "$result"
         return 0
     fi
+    local next_target=
     local newvalue=
     local has_set=0
     local filename=
@@ -425,7 +427,7 @@ available attributes:
             ;;
 
         esac
-        if [ $rc -ne 0 ]; then
+        if [ "$rc" -ne 0 ]; then
             return "$rc"
         fi
     fi
@@ -435,16 +437,16 @@ available attributes:
             pfs-id --pad "$target"
         ;;
         fs-uuid)
-            eval $hammer_cmd info "$target" | grep -E '^[[:space:]]FSID' | rev | cut -d' ' -f1 | rev
+            eval "$hammer_cmd" info "$target" | grep -E '^[[:space:]]FSID' | rev | cut -d' ' -f1 | rev
         ;;
         type|state)
         result="$(eval "$hammer_cmd" pfs-status "$target" | grep 'operating as a' | rev | cut -f1 -d' ' | rev)"
         if [ "$attr" = state ]; then
             if [ -h "$target" ]; then
-            local next_target="$(readlink "$target")" || rc=$?
-            while [ $rc -eq 0 ] && [ "$target" != "$next_target" ]; do
+            next_target="$(readlink "$target")" || rc=$?
+            while [ "$rc" -eq 0 ] && [ "$target" != "$next_target" ]; do
                 if case "$next_target" in /*) false ;; *) true ;; esac ; then
-                    next_target="$(dirname $target)/$next_target"
+                    next_target="$(dirname "$target")/$next_target"
                 fi
                 [ "$DEBUG" = '1' ] && perror "$target"'->'"$next_target"
                 target="$next_target"
@@ -524,7 +526,7 @@ find-mount-for-pfs () {
         return 1
     fi
     target_fs_uuid=$(attr-by "$target" -- fs-uuid)
-    if ! list-mounts | while IFS=$'\n' read line
+    if ! list-mounts | while IFS=$'\n' read -r line
     do
         mount_uuid=$(attr-by "$line" -- fs-uuid)
         if [ "$mount_uuid" = "$target_fs_uuid" ]; then
@@ -596,7 +598,6 @@ list-pfs () {
     local found=0
     local rc=
     local pfs_id=
-    local seen_pfs=''
 
     while [ $# -gt 0 ]
     do
@@ -620,14 +621,14 @@ list-pfs () {
     done
     local extra=
     if [ $# -gt 1 ]; then
-        if [ $_show_root -eq 1 ]; then
+        if [ "$_show_root" -eq 1 ]; then
             extra='--all'
         fi
         while [ $# -gt 0 ]; do
             rc=0
             list-pfs $extra "${1}" || rc=$?
             shift
-            if [ $rc -ne 0 ]; then
+            if [ "$rc" -ne 0 ]; then
                 return "$rc"
             fi
         done
@@ -654,7 +655,7 @@ list-pfs () {
     fi
     local pfs_id=
     local latest_txn=
-    $hammer_cmd info $1 | while read line
+    $hammer_cmd info "$1" | while read line
     do
         case "$line" in
             *PFS#*Mode*Snaps*)
@@ -669,11 +670,11 @@ list-pfs () {
             fi
             case "$line" in
                 [0-9]*MASTER*)
-                    pfs_id="$(echo $line | cut -f1 -d' ')"
+                    pfs_id="$(echo "$line" | cut -f1 -d' ')"
                     printf "$mnt_pt/@@-1:%05d\n" $pfs_id
                     ;;
                 [0-9]*SLAVE*)
-                    pfs_id="$(echo $line | cut -f1 -d' ')"
+                    pfs_id="$(echo "$line" | cut -f1 -d' ')"
                     latest_txn="$(hammer pfs-status $(printf "$mnt_pt/@@-1:%05d\n" $pfs_id) | grep 'sync-end-tid=' | cut -f2- -d=)"
                     printf "$mnt_pt/@@%s:%05d\n" $latest_txn $pfs_id
                     ;;
@@ -699,4 +700,4 @@ help () {
 
 rc=$?
 "${_command}" "$@" || rc=$?
-exit $rc
+exit "$rc"
