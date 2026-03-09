@@ -369,7 +369,7 @@ available attributes:
     # fi
     for maybe_attr in $(echo "${attr}" | tr "${delim}" '\n')
     do
-        if ! case :"${pfs_attrib_pattern}": in *":$(echo "${maybe_attr}" | tr "$delim" ':'):"*) true ;; *) false ;; esac ; then
+        if ! case :"${pfs_attrib_pattern}": in *":$(printf '%s' "${maybe_attr}" | tr "$delim" ':'):"*) true ;; *) false ;; esac ; then
             perror "${maybe_attr}"' is not a valid attribute!'
             _has_bad_attr=1
         fi
