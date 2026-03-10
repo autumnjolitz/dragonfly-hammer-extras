@@ -206,13 +206,14 @@ Returns the pfs id of PATH
         return 3
     fi
     local pfs_id=
-    $hammer_cmd pfs-status "$@" | grep -e 'PFS#' -e '[[:digit:]]* {$' | rev | cut -d# -f1 | rev | cut -f1 -d' ' | while IFS="${NEWLINE}" read -r pfs_id; do
+    local pfs_ids="$($hammer_cmd pfs-status "$@" | grep -e 'PFS#' -e '[[:digit:]]* {$' | rev | cut -d# -f1 | rev | cut -f1 -d' ' | while IFS="${NEWLINE}" read -r pfs_id; do
         if [ "${_pad}" -eq 1 ]; then
             printf '%05d\n' "$pfs_id"
         else
             printf '%d\n' "$pfs_id"
         fi
-    done | tr '\n' "$delim"
+    done | trim | tr '\n' "$delim")"
+    printf '%s\n' "$pfs_ids"
 }
 
 # shellcheck disable=SC2329
