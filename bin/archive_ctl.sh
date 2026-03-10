@@ -790,7 +790,7 @@ list_replicas_for_pfs () {
                 return 2
                 ;;
             *)
-                if [ "$pfs" != '' ]; then
+                if [ "$pfs" = '' ]; then
                     pfs="${1}"
                 else
                     pfs="${pfs}${NEWLINE}${1}"
@@ -799,6 +799,11 @@ list_replicas_for_pfs () {
                 ;;
         esac
     done
+    if [ "$_print_help" -eq 1 ]; then
+        perror "$0"' list_replicas_for_pfs PFS [PFS] ... [PFS]
+'
+        return 2
+    fi
     pfs="$(printf '%s' "$pfs" | trim)"
     if [ "${pfs}" = '' ]; then
         perror 'no path to PFS given!'
