@@ -804,7 +804,7 @@ list_replicas_for_pfs () {
 '
         return 2
     fi
-    pfs="$(printf '%s' "$pfs" | trim)"
+    pfs="$(printf '%s\n' "$pfs" | trim)"
     if [ "${pfs}" = '' ]; then
         perror 'no path to PFS given!'
         return 2
