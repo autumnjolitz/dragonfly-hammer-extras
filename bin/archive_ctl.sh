@@ -778,6 +778,7 @@ pfs_list () {
 list_replicas_for_pfs () {
     local _print_help=0
     local pfs=
+    local OIFS=
 
     while [ $# -gt 0 ]; do
         case "${1}" in
@@ -805,11 +806,18 @@ list_replicas_for_pfs () {
         return 2
     fi
     pfs="$(printf '%s\n' "$pfs" | trim)"
-    if [ "${pfs}" = '' ]; then
+    OIFS="${IFS}"
+    IFS="${NEWLINE}"
+    for pfs in $pfs
+    do
+        set -- "$@" "$pfs"
+    done
+    IFS="$OIFS"
+    if [ $# -eq 0 ]; then
         perror 'no path to PFS given!'
         return 2
     fi
-    local pfs_ids="$(IFS=''"${NEWLINE}" run pfs-id "${pfs}")"
+    local pfs_ids="$(run pfs-id "$@")"
     echo "$pfs_ids"
 }
 
