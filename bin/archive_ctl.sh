@@ -102,7 +102,6 @@ update () {
         return 2
     fi
 }
-# register_command archive_ctl update
 
 # shellcheck disable=SC2329
 in_pfs () {
@@ -118,13 +117,11 @@ in_pfs () {
     fi
     return "$rc"
 }
-register_command archive_ctl in_pfs
 
 # shellcheck disable=SC2329
 list_mounts() {
     mount -t hammer -p | cut -f2
 }
-register_command archive_ctl list_mounts
 
 # shellcheck disable=SC2329
 pfs_id () {
@@ -190,7 +187,6 @@ Returns the pfs id of PATH
         echo "$pfs_id"
     fi
 }
-register_command archive_ctl pfs_id
 
 # shellcheck disable=SC2329
 is_snapshot () {
@@ -237,7 +233,6 @@ is_snapshot () {
     txn_id="$(printf '%s' "${txn_id}" | sed 's|@@||g')"
     eval "$hammer_cmd" snapls "$target" | cut -f1 | grep -qE "^$txn_id$"
 }
-register_command archive_ctl is_snapshot
 
 # shellcheck disable=SC2329
 by_attr () {
@@ -606,7 +601,6 @@ available attributes:
         ;;
     esac
 }
-register_command archive_ctl by_attr
 
 # shellcheck disable=SC2329
 find_mount_for_pfs () {
@@ -635,7 +629,6 @@ find_mount_for_pfs () {
         return 1
     fi
 }
-register_command archive_ctl find_mount_for_pfs
 
 # shellcheck disable=SC2329
 pfs_home () {
@@ -687,7 +680,6 @@ pfs_home () {
         echo "${mount_point}/@@-1:${pfs_id}"
     fi
 }
-register_command archive_ctl pfs_home
 
 # shellcheck disable=SC2329
 pfs_list () {
@@ -781,14 +773,40 @@ pfs_list () {
         fi
     done
 }
-register_command archive_ctl pfs_list
 
 # shellcheck disable=SC2329
 list_replicas_for_pfs () {
-    perror 'unimplemented'
-    return 2
+    local _print_help=0
+    local pfs=
+
+    while [ $# -gt 0 ]; do
+        case "${1}" in
+            --help|-h)
+                _print_help=1
+                break
+                ;;
+            -*)
+                perror 'unknown option: '"'${1}'"
+                return 2
+                ;;
+            *)
+                if [ "$pfs" != '' ]; then
+                    pfs="${1}"
+                else
+                    pfs="${pfs}${NEWLINE}${1}"
+                fi
+                shift
+                ;;
+        esac
+    done
+    pfs="$(printf '%s' "$pfs" | trim)"
+    if [ "${pfs}" = '' ]; then
+        perror 'no path to PFS given!'
+        return 2
+    fi
+    local pfs_ids="$(IFS=''"${NEWLINE}" run pfs-id "${pfs}")"
+    echo "$pfs_ids"
 }
-# register_command archive_ctl list_replicas_for_pfs
 
 # shellcheck disable=SC2329
 help () {
@@ -820,7 +838,6 @@ Canonical PFS search paths are:'"${NEWLINE}${TAB}'$(printf '%s' "$pfs_home_searc
 Available actions: '"${NEWLINE}  $(list_registered_commands archive_ctl | join_by_delimiter '\n  ')"'
 '
 }
-register_command archive_ctl help
 
 run () {
     local rc=0
@@ -840,5 +857,18 @@ run () {
     "$_command" "$@" || rc=$?
     return "$rc"
 }
+
+# register_command archive_ctl update
+# register_command archive_ctl list_replicas_for_pfs
+# register_command archive_ctl mirror
+register_command archive_ctl help
+register_command archive_ctl by_attr
+register_command archive_ctl find_mount_for_pfs
+register_command archive_ctl in_pfs
+register_command archive_ctl is_snapshot
+register_command archive_ctl list_mounts
+register_command archive_ctl pfs_home
+register_command archive_ctl pfs_id
+register_command archive_ctl pfs_list
 
 run "$@"
