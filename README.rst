@@ -76,6 +76,11 @@ Example:
     dfly:~$ archive-ctl pfs-id --pad
     00001
 
+    dfly:~$ archive-ctl pfs-id --delim '\t'  /pools/1/pfs/logs /pools/1/pfs/backups /pools/1/pfs/databases
+    1   2   3
+    dfly:~$
+
+
 pfs-home
 ^^^^^^^^^^
 
