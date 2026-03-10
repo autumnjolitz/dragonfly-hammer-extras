@@ -192,6 +192,7 @@ Returns the pfs id of PATH
             ;;
         esac
     done
+    delim="${delim:-$default_delim}"
     OIFS="${IFS}"
     IFS="${NEWLINE}"
     for pfs in $target
