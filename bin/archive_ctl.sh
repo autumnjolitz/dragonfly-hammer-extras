@@ -128,6 +128,15 @@ pfs_id () {
     local _pad=0
     local rc=0
     local target=
+    local maybe_delim=
+    local delim=
+    local default_delim=','
+    local escaped_default_delim=
+    local OIFS=
+    local pfs=
+
+    escaped_default_delim="$(printf '%s' "$default_delim")"
+
     while [ $# -gt 0 ] ; do
         case "${1:-}" in
             --pad|-p)
@@ -135,57 +144,74 @@ pfs_id () {
                 shift
             ;;
             --help|-h)
-                perror 'pfs-id [-p | --pad] PATH
+                perror 'pfs-id [-p | --pad] PATH [PATH] [... [PATH]]
 
 General flags:
+    -D --delim'"${TAB}"' character to use as a delimiter (defaults to '"'${escaped_default_delim}'"')
     -p --pad'"${TAB}"' pad out the id to match '"'"'%05d'"'"'
 
 Returns the pfs id of PATH
 '
                 return 2
                 ;;
+            -D|--delim)
+                shift
+                maybe_delim="${1:-}"
+                if [ "$maybe_delim" = '' ]; then
+                    perror 'missing delimiter value!'
+                    return 2
+                fi
+                shift
+                case "${maybe_delim}" in
+                    \\*)
+                        maybe_delim="$(printf '%b' "${maybe_delim}")"
+                    ;;
+                esac
+                delim="${maybe_delim}"
+                if [ "$(printf '%s' "$delim" | wc -c)" -gt 1 ]; then
+                    perror 'delimiter may not exceed one character!'
+                    return 2
+                fi
+            ;;
+
             -*)
                 perror 'unknown argument '"${1}"'!'
                 return 4
                 ;;
             *)
-                target="$1"
+                if ! in_pfs "${1}"; then
+                    perror 'error: '"${1} is not a pfs!"
+                    return 1
+                fi
+                if [ "$target" = '' ]; then
+                    target="$1"
+                else
+                    target="${target}${NEWLINE}${1}"
+                fi
                 shift
-                break
             ;;
         esac
     done
-    if [ $# -gt 0 ]; then
-        pfs_id "$target" || rc=$?
-        if [ "$rc" -ne 0 ]; then
-            return "$rc"
-        fi
-        while [ $# -gt 0 ]; do
-            pfs_id "$1" || rc=$?
-            shift
-            if [ "$rc" -ne 0 ]; then
-                break
-            fi
-        done
-        return "$rc"
-    fi
+    OIFS="${IFS}"
+    IFS="${NEWLINE}"
+    for pfs in $target
+    do
+        set -- "$@" "$pfs"
+    done
+    IFS="$OIFS"
 
-    local next_target=
-    if [ "$target" = '' ]; then
-    perror 'error: path not given to find a root for'
+    if [ $# -eq 0 ]; then
+        perror 'error: path not given to find a root for'
         return 3
     fi
-    if ! in_pfs "$target"; then
-        perror 'error: not a path in a PFS!'
-        return 2
-    fi
-    local line=
-    local pfs_id="$(eval "$hammer_cmd" pfs-status "$target" | head -1 | rev | cut -f1 -d'#' | rev | cut -f1 -d' ')"
-    if [ "$_pad" -eq 1 ]; then
-        printf '%05d\n' "$pfs_id"
-    else
-        echo "$pfs_id"
-    fi
+    local pfs_id=
+    $hammer_cmd pfs-status "$@" | grep -e 'PFS#' -e '[[:digit:]]* {$' | rev | cut -d# -f1 | rev | cut -f1 -d' ' | while IFS="${NEWLINE}" read -r pfs_id; do
+        if [ "${_pad}" -eq 1 ]; then
+            printf '%05d\n' "$pfs_id"
+        else
+            printf '%d\n' "$pfs_id"
+        fi
+    done | tr '\n' "$delim"
 }
 
 # shellcheck disable=SC2329
