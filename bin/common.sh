@@ -110,9 +110,47 @@ dgetenv () {
 
 trim () {
     local _skip_empty=1
+    local _trim_whitespace=1
+    local _trailing_delimiter=0
     local line=
+    local delim=
+    local default_delim="$NEWLINE"
+    local maybe_delim=
+
+    escaped_default_delim="$(printf '%s' "$default_delim")"
     while [ $# -gt 0 ]; do
         case "${1:-}" in
+            -D|--delim)
+                shift
+                maybe_delim="${1:-}"
+                if [ "$maybe_delim" = '' ]; then
+                    perror 'missing delimiter value!'
+                    return 2
+                fi
+                shift
+                case "${maybe_delim}" in
+                    \\*)
+                        maybe_delim="$(printf '%b' "${maybe_delim}")"
+                    ;;
+                esac
+                delim="${maybe_delim}"
+                if [ "$(printf '%s' "$delim" | wc -c)" -gt 1 ]; then
+                    perror 'delimiter may not exceed one character!'
+                    return 2
+                fi
+            ;;
+            -N|--append-trailing-delimiter)
+                _trailing_delimiter=1
+                shift
+                ;;
+            -T|--skip-whitespace)
+                _trim_whitespace=0
+                shift
+                ;;
+            -t|--trim-whitespace)
+                _trim_whitespace=1
+                shift
+                ;;
             -e|--skip-empty)
                 _skip_empty=1
                 shift
@@ -125,25 +163,60 @@ trim () {
                 perror 'trim -eE
 trim [--skip-empty | --keep-empty ] '"'"' some  string  '"'"'
 
+General flags:
+
+-D --delim '"${TAB}"' set delimiter (defaults to '"'${escaped_default_delim}'"')
+-N --append-newline'"${TAB}"' append a trailing newline to sequence
+-T --skip-whitespace'"${TAB}"' don'"'"'t trim whitespace
+-t --trim-whitespace'"${TAB}"' trim whitespace (default)
+-e --skip-empty'"${TAB}"' skip empty lines
+-E --keep-empty'"${TAB}"' return empty lines
+
 can also accept stdin so you can pipe to it.
 '
                 return 1
+            ;;
+            -*)
+                perror 'unknown argument: '"${1}"
+                return 2
             ;;
             *)
                 break
             ;;
         esac
     done
+    delim="${delim:-$default_delim}"
     if [ ! -t 0 ]; then
-        while IFS="${NEWLINE}" read -r line
+        local i=0
+        local pattern='%s'
+        local buffer=
+        while IFS= read -r buffer
         do
-            line="$(printf '%s\n' "$line" | sed 's|^ *||g;s| *$||g')"
-            if [ $_skip_empty -eq 1 ] && [ "$line" = '' ]; then
-                continue
-            fi
-            echo "$line"
-
+            IFS="$delim"
+            for line in $buffer; do
+                if [ "${_trim_whitespace}" -eq 1 ]; then
+                    line="$(printf '%s' "$line" | sed 's|^[[:space:]]*||g;s|[[:space:]]*$||g')"
+                fi
+                if [ "$line" != '' ]; then
+                    line="$(printf '%s' "${line}"  | tr -d "$delim")"
+                fi
+                if [ $_skip_empty -eq 1 ] && [ "$line" = '' ]; then
+                    continue
+                fi
+                i="$(( i + 1 ))"
+                if [ "$i" -eq 2 ]; then
+                    pattern="${delim}"'%s'
+                fi
+                # shellcheck disable=SC2059
+                printf "$pattern" "$line"
+            done
         done < /dev/stdin
+        if [ "$_trailing_delimiter" -eq 1 ]; then
+            printf '%s' "${delim}"
+        fi
+        if [ -t 1 ]; then
+            printf '\n'
+        fi
         return 0
     else
         local extra=
@@ -152,7 +225,13 @@ can also accept stdin so you can pipe to it.
         elif [ $_skip_empty -eq 0 ]; then
             extra=-E
         fi
-        printf '%s\n' "${@}" | trim "$extra"
+        if [ $_trim_whitespace -eq 1 ]; then
+            extra="$extra -t"
+        else
+            extra="$extra -T"
+        fi
+        # shellcheck disable=2086
+        printf '%s\n' "${@}" | trim -D "$delim" $extra
     fi
 }
 

@@ -61,14 +61,13 @@ pfs-id
 
 .. code-block:: shell-session
 
-    dfly:~ pfs-id -h
-    pfs-id [-p | --pad] PATH
+    dfly:~$ pfs-id [-p | --pad] PATH [PATH] [... [PATH]]
 
     General flags:
+        -D --delim   character to use as a delimiter (defaults to '\n')
         -p --pad     pad out the id to match '%05d'
 
     Returns the pfs id of PATH
-
 
 Example:
 
@@ -199,7 +198,6 @@ Status: Not implemented
      pfs/my_pfs_name
      .pfs/my_pfs_name
      .archive_config/pfs/my_pfs_name
-     my_pfs_name
 
     QUERY string contains additional options for a per URL configuration:
 

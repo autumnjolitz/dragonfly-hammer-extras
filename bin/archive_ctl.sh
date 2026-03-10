@@ -130,12 +130,12 @@ pfs_id () {
     local target=
     local maybe_delim=
     local delim=
-    local default_delim=','
+    local default_delim="${NEWLINE}"
     local escaped_default_delim=
     local OIFS=
     local pfs=
 
-    escaped_default_delim="$(printf '%s' "$default_delim")"
+    escaped_default_delim="\\n"
 
     while [ $# -gt 0 ] ; do
         case "${1:-}" in
